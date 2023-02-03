@@ -206,6 +206,68 @@ resource "honeycombio_trigger" "test" {
 	})
 }
 
+func TestAccHoneycombIOTrigger_changingRecipientID(t *testing.T) {
+	dataset := testAccDataset()
+
+	// test changing the recipient id
+	resource.Test(t, resource.TestCase{
+		PreCheck:          testAccPreCheck(t),
+		ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccChangingRecipientID(dataset, "honeycombio_slack_recipient.test1"),
+				Check:  resource.TestCheckResourceAttrPair("honeycombio_trigger.test", "recipient.0.id", "honeycombio_slack_recipient.test1", "id"),
+			},
+			{
+				Config: testAccChangingRecipientID(dataset, "honeycombio_pagerduty_recipient.test2"),
+				Check:  resource.TestCheckResourceAttrPair("honeycombio_trigger.test", "recipient.0.id", "honeycombio_pagerduty_recipient.test2", "id"),
+			},
+		},
+	})
+}
+
+func testAccChangingRecipientID(dataset, recipientName string) string {
+	return fmt.Sprintf(`
+data "honeycombio_query_specification" "test" {
+  calculation {
+	op     = "AVG"
+	column = "duration_ms"
+  }
+  time_range = 1800
+}
+
+resource "honeycombio_query" "test" {
+  dataset    = "%s"
+  query_json = data.honeycombio_query_specification.test.json
+}
+
+resource "honeycombio_slack_recipient" "test1" {
+  channel = "#alerty-alerts"
+}
+
+resource "honeycombio_pagerduty_recipient" "test2" {
+  integration_key  = "09c9d4cacd68933151a1ef1048b67dd5"
+  integration_name = "acctest"
+}
+
+resource "honeycombio_trigger" "test" {
+
+  name    = "Test trigger with changing recipient id"
+  dataset = "%s"
+
+  query_id = honeycombio_query.test.id
+
+  threshold {
+	op    = ">"
+	value = 100
+  }
+
+  recipient {
+	id = %s.id
+  }
+}`, dataset, dataset, recipientName)
+}
+
 func TestAccHoneycombioTrigger_recipientOrderingNoDiff(t *testing.T) {
 	dataset := testAccDataset()
 
